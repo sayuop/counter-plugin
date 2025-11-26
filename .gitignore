@@ -16,5 +16,9 @@ main.js
 # Claude Code
 .claude
 
+# Release
+release/
+*.zip
+
 # Obsidian
 data.json
