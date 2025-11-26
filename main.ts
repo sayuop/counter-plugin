@@ -28,14 +28,14 @@ export default class CounterPlugin extends Plugin {
 		const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
 		const nodesToReplace: Array<{ node: Node; parent: Node }> = [];
 
-		let node;
-		while ((node = walker.nextNode())) {
+		let node: Node | null;
+		while ((node = walker.nextNode()) !== null) {
 			const text = node.textContent || '';
 			const lines = text.split('\n');
 
 			lines.forEach((line, index) => {
 				const match = line.match(counterRegex);
-				if (match) {
+				if (match && node) {
 					nodesToReplace.push({ node, parent: node.parentNode! });
 				}
 			});
