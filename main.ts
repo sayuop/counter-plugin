@@ -85,12 +85,14 @@ export default class CounterPlugin extends Plugin {
 	}
 
 	createCounterElement(
-		value: number,
+		initialValue: number,
 		label: string,
 		context: MarkdownPostProcessorContext
 	): HTMLElement {
 		const container = document.createElement('div');
 		container.className = 'counter-container';
+
+		let currentValue = initialValue;
 
 		const minusButton = document.createElement('button');
 		minusButton.className = 'counter-button counter-minus';
@@ -99,7 +101,7 @@ export default class CounterPlugin extends Plugin {
 
 		const counterDisplay = document.createElement('span');
 		counterDisplay.className = 'counter-display';
-		counterDisplay.textContent = value.toString();
+		counterDisplay.textContent = currentValue.toString();
 
 		const plusButton = document.createElement('button');
 		plusButton.className = 'counter-button counter-plus';
@@ -116,7 +118,7 @@ export default class CounterPlugin extends Plugin {
 
 			const editor = view.editor;
 			const content = editor.getValue();
-			const counterRegex = /^~\s*\(\s*\d*\s*\)\s*(.*)$/gm;
+			const counterRegex = /~\s*\(\s*\d*\s*\)\s*(.+)/gm;
 
 			let matchIndex = 0;
 			const newContent = content.replace(counterRegex, (match, capturedLabel) => {
@@ -134,15 +136,15 @@ export default class CounterPlugin extends Plugin {
 		};
 
 		minusButton.addEventListener('click', () => {
-			const newValue = value - 1;
-			counterDisplay.textContent = newValue.toString();
-			updateSource(newValue);
+			currentValue = currentValue - 1;
+			counterDisplay.textContent = currentValue.toString();
+			updateSource(currentValue);
 		});
 
 		plusButton.addEventListener('click', () => {
-			const newValue = value + 1;
-			counterDisplay.textContent = newValue.toString();
-			updateSource(newValue);
+			currentValue = currentValue + 1;
+			counterDisplay.textContent = currentValue.toString();
+			updateSource(currentValue);
 		});
 
 		container.appendChild(minusButton);
