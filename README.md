@@ -1,5 +1,9 @@
 # Counter Plugin for Obsidian
 
+![Obsidian Plugin](https://img.shields.io/badge/Obsidian-Plugin-blueviolet?logo=obsidian)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Version](https://img.shields.io/badge/Version-1.1.0-blue)
+
 A simple Obsidian plugin that creates interactive number counters with +/- buttons.
 
 ## Usage
