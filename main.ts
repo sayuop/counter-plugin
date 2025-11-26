@@ -3,12 +3,12 @@ import { Decoration, DecorationSet, EditorView, WidgetType, ViewPlugin, ViewUpda
 import { RangeSetBuilder } from '@codemirror/state';
 
 class CounterWidget extends WidgetType {
-	constructor(private value: number, private label: string, private plugin: CounterPlugin) {
+	constructor(private value: number, private label: string, private originalText: string, private plugin: CounterPlugin) {
 		super();
 	}
 
 	toDOM(view: EditorView): HTMLElement {
-		return this.plugin.createCounterElement(this.value, this.label, {} as MarkdownPostProcessorContext);
+		return this.plugin.createCounterElement(this.value, this.label, this.originalText, {} as MarkdownPostProcessorContext);
 	}
 }
 
@@ -26,9 +26,10 @@ function buildCounterDecorations(view: EditorView, plugin: CounterPlugin): Decor
 			const endPos = startPos + match[0].length;
 			const value = match[1] === '' ? 0 : parseInt(match[1], 10);
 			const label = match[2].trim();
+			const originalText = match[0];
 
 			const widget = Decoration.replace({
-				widget: new CounterWidget(value, label, plugin),
+				widget: new CounterWidget(value, label, originalText, plugin),
 			});
 
 			builder.add(startPos, endPos, widget);
@@ -76,7 +77,7 @@ export default class CounterPlugin extends Plugin {
 	processCounters(element: HTMLElement, context: MarkdownPostProcessorContext) {
 		const counterRegex = /~\s*\(\s*(\d*)\s*\)\s*(.+)/g;
 		const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-		const nodesToReplace: Array<{ node: Node; parent: Node; replacements: Array<{type: 'text' | 'counter', content: string, value?: number, label?: string}> }> = [];
+		const nodesToReplace: Array<{ node: Node; parent: Node; replacements: Array<{type: 'text' | 'counter', content: string, value?: number, label?: string, originalText?: string}> }> = [];
 
 		let node: Node | null;
 		while ((node = walker.nextNode()) !== null) {
@@ -84,7 +85,7 @@ export default class CounterPlugin extends Plugin {
 
 			if (counterRegex.test(text)) {
 				counterRegex.lastIndex = 0;
-				const replacements: Array<{type: 'text' | 'counter', content: string, value?: number, label?: string}> = [];
+				const replacements: Array<{type: 'text' | 'counter', content: string, value?: number, label?: string, originalText?: string}> = [];
 				let lastIndex = 0;
 				let match;
 
@@ -103,7 +104,8 @@ export default class CounterPlugin extends Plugin {
 						type: 'counter',
 						content: match[0],
 						value: value,
-						label: label
+						label: label,
+						originalText: match[0]
 					});
 
 					lastIndex = match.index + match[0].length;
@@ -132,6 +134,7 @@ export default class CounterPlugin extends Plugin {
 					const counterContainer = this.createCounterElement(
 						replacement.value!,
 						replacement.label!,
+						replacement.originalText!,
 						context
 					);
 					fragment.appendChild(counterContainer);
@@ -147,6 +150,7 @@ export default class CounterPlugin extends Plugin {
 	createCounterElement(
 		initialValue: number,
 		label: string,
+		originalText: string,
 		context: MarkdownPostProcessorContext
 	): HTMLElement {
 		const container = document.createElement('div');
@@ -178,19 +182,12 @@ export default class CounterPlugin extends Plugin {
 
 			const editor = view.editor;
 			const content = editor.getValue();
-			const counterRegex = /~\s*\(\s*\d*\s*\)\s*(.+)/gm;
 
-			let matchIndex = 0;
-			const newContent = content.replace(counterRegex, (match, capturedLabel) => {
-				const currentLabel = capturedLabel.trim();
-				if (currentLabel === label) {
-					matchIndex++;
-					return `~ (${newValue}) ${label}`;
-				}
-				return match;
-			});
-
-			if (content !== newContent) {
+			// Find and replace only the first occurrence of this exact counter text
+			const index = content.indexOf(originalText);
+			if (index !== -1) {
+				const newText = `~ (${newValue}) ${label}`;
+				const newContent = content.substring(0, index) + newText + content.substring(index + originalText.length);
 				editor.setValue(newContent);
 			}
 		};
