@@ -7,16 +7,6 @@ export default class CounterPlugin extends Plugin {
 		this.registerMarkdownPostProcessor((element, context) => {
 			this.processCounters(element, context);
 		});
-
-		this.registerEvent(
-			this.app.workspace.on('editor-change', () => {
-				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (view) {
-					// Refresh the preview to update counters
-					view.previewMode.rerender(true);
-				}
-			})
-		);
 	}
 
 	onunload() {
@@ -24,51 +14,69 @@ export default class CounterPlugin extends Plugin {
 	}
 
 	processCounters(element: HTMLElement, context: MarkdownPostProcessorContext) {
-		const counterRegex = /^~\s*\(\s*(\d*)\s*\)\s*(.*)$/;
+		const counterRegex = /~\s*\(\s*(\d*)\s*\)\s*(.+)/g;
 		const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-		const nodesToReplace: Array<{ node: Node; parent: Node }> = [];
+		const nodesToReplace: Array<{ node: Node; parent: Node; replacements: Array<{type: 'text' | 'counter', content: string, value?: number, label?: string}> }> = [];
 
 		let node: Node | null;
 		while ((node = walker.nextNode()) !== null) {
 			const text = node.textContent || '';
-			const lines = text.split('\n');
 
-			lines.forEach((line, index) => {
-				const match = line.match(counterRegex);
-				if (match && node) {
-					nodesToReplace.push({ node, parent: node.parentNode! });
-				}
-			});
-		}
+			if (counterRegex.test(text)) {
+				counterRegex.lastIndex = 0;
+				const replacements: Array<{type: 'text' | 'counter', content: string, value?: number, label?: string}> = [];
+				let lastIndex = 0;
+				let match;
 
-		nodesToReplace.forEach(({ node, parent }) => {
-			const text = node.textContent || '';
-			const lines = text.split('\n');
-			const fragment = document.createDocumentFragment();
+				while ((match = counterRegex.exec(text)) !== null) {
+					if (match.index > lastIndex) {
+						replacements.push({
+							type: 'text',
+							content: text.substring(lastIndex, match.index)
+						});
+					}
 
-			lines.forEach((line, index) => {
-				const match = line.match(counterRegex);
-
-				if (match) {
-					const currentValue = match[1] === '' ? 0 : parseInt(match[1], 10);
+					const value = match[1] === '' ? 0 : parseInt(match[1], 10);
 					const label = match[2].trim();
 
-					const counterContainer = this.createCounterElement(
-						currentValue,
-						label,
-						node,
-						context
-					);
+					replacements.push({
+						type: 'counter',
+						content: match[0],
+						value: value,
+						label: label
+					});
 
-					fragment.appendChild(counterContainer);
-				} else {
-					if (line) {
-						fragment.appendChild(document.createTextNode(line));
-					}
+					lastIndex = match.index + match[0].length;
 				}
 
-				if (index < lines.length - 1) {
-					fragment.appendChild(document.createTextNode('\n'));
+				if (lastIndex < text.length) {
+					replacements.push({
+						type: 'text',
+						content: text.substring(lastIndex)
+					});
+				}
+
+				if (replacements.length > 0) {
+					nodesToReplace.push({ node, parent: node.parentNode!, replacements });
+				}
+
+				counterRegex.lastIndex = 0;
+			}
+		}
+
+		nodesToReplace.forEach(({ node, parent, replacements }) => {
+			const fragment = document.createDocumentFragment();
+
+			replacements.forEach(replacement => {
+				if (replacement.type === 'counter') {
+					const counterContainer = this.createCounterElement(
+						replacement.value!,
+						replacement.label!,
+						context
+					);
+					fragment.appendChild(counterContainer);
+				} else {
+					fragment.appendChild(document.createTextNode(replacement.content));
 				}
 			});
 
@@ -79,7 +87,6 @@ export default class CounterPlugin extends Plugin {
 	createCounterElement(
 		value: number,
 		label: string,
-		sourceNode: Node,
 		context: MarkdownPostProcessorContext
 	): HTMLElement {
 		const container = document.createElement('div');
