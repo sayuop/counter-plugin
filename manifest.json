@@ -1,7 +1,7 @@
 {
   "id": "counter-plugin",
   "name": "Counter Plugin",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "minAppVersion": "0.15.0",
   "description": "Create interactive counters with +/- buttons using ~ ( ) syntax",
   "author": "crib",

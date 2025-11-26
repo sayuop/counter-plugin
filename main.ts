@@ -3,18 +3,18 @@ import { Decoration, DecorationSet, EditorView, WidgetType, ViewPlugin, ViewUpda
 import { RangeSetBuilder } from '@codemirror/state';
 
 class CounterWidget extends WidgetType {
-	constructor(private value: number, private label: string, private originalText: string, private plugin: CounterPlugin) {
+	constructor(private value: number, private label: string, private originalText: string, private plugin: CounterPlugin, private position: number) {
 		super();
 	}
 
 	toDOM(view: EditorView): HTMLElement {
-		return this.plugin.createCounterElement(this.value, this.label, this.originalText, {} as MarkdownPostProcessorContext);
+		return this.plugin.createCounterElement(this.value, this.label, this.originalText, null, this.position);
 	}
 }
 
 function buildCounterDecorations(view: EditorView, plugin: CounterPlugin): DecorationSet {
 	const builder = new RangeSetBuilder<Decoration>();
-	const counterRegex = /~\s*\(\s*(\d*)\s*\)\s*(.+)/g;
+	const counterRegex = /~\s*\(\s*(-?\d*)\s*\)\s*(.+)/g;
 
 	for (let { from, to } of view.visibleRanges) {
 		const text = view.state.doc.sliceString(from, to);
@@ -29,7 +29,7 @@ function buildCounterDecorations(view: EditorView, plugin: CounterPlugin): Decor
 			const originalText = match[0];
 
 			const widget = Decoration.replace({
-				widget: new CounterWidget(value, label, originalText, plugin),
+				widget: new CounterWidget(value, label, originalText, plugin, startPos),
 			});
 
 			builder.add(startPos, endPos, widget);
@@ -75,7 +75,7 @@ export default class CounterPlugin extends Plugin {
 	}
 
 	processCounters(element: HTMLElement, context: MarkdownPostProcessorContext) {
-		const counterRegex = /~\s*\(\s*(\d*)\s*\)\s*(.+)/g;
+		const counterRegex = /~\s*\(\s*(-?\d*)\s*\)\s*(.+)/g;
 		const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
 		const nodesToReplace: Array<{ node: Node; parent: Node; replacements: Array<{type: 'text' | 'counter', content: string, value?: number, label?: string, originalText?: string}> }> = [];
 
@@ -151,10 +151,14 @@ export default class CounterPlugin extends Plugin {
 		initialValue: number,
 		label: string,
 		originalText: string,
-		context: MarkdownPostProcessorContext
+		context: MarkdownPostProcessorContext | null,
+		position?: number
 	): HTMLElement {
 		const container = document.createElement('div');
 		container.className = 'counter-container';
+
+		// Store the section info to locate this specific counter (only available in reading mode)
+		const sectionInfo = context?.getSectionInfo?.(container);
 
 		let currentValue = initialValue;
 
@@ -176,32 +180,83 @@ export default class CounterPlugin extends Plugin {
 		labelSpan.className = 'counter-label';
 		labelSpan.textContent = label;
 
-		const updateSource = (newValue: number) => {
+		const updateSource = (oldValue: number, newValue: number) => {
 			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 			if (!view) return;
 
 			const editor = view.editor;
-			const content = editor.getValue();
+			const counterRegex = /~\s*\(\s*(-?\d*)\s*\)\s*(.+)/;
 
-			// Find and replace only the first occurrence of this exact counter text
-			const index = content.indexOf(originalText);
-			if (index !== -1) {
-				const newText = `~ (${newValue}) ${label}`;
-				const newContent = content.substring(0, index) + newText + content.substring(index + originalText.length);
-				editor.setValue(newContent);
+			// If we have a position (from edit mode), use it to find the exact counter
+			if (position !== undefined) {
+				// Convert document position to line number
+				const content = editor.getValue();
+				let currentPos = 0;
+				let targetLine = 0;
+
+				const lines = content.split('\n');
+				for (let i = 0; i < lines.length; i++) {
+					const lineEndPos = currentPos + lines[i].length;
+					if (position >= currentPos && position <= lineEndPos) {
+						targetLine = i;
+						break;
+					}
+					currentPos = lineEndPos + 1; // +1 for the newline character
+				}
+
+				const lineText = editor.getLine(targetLine);
+				const match = lineText.match(counterRegex);
+
+				if (match && match[2].trim() === label) {
+					const matchedValue = match[1] === '' ? 0 : parseInt(match[1], 10);
+
+					// Verify this is our counter by checking the value
+					if (matchedValue === oldValue) {
+						const newText = lineText.replace(counterRegex, `~ (${newValue}) ${label}`);
+						editor.setLine(targetLine, newText);
+						return;
+					}
+				}
+			}
+
+			// Get section info to find the exact line range (reading mode)
+			if (sectionInfo) {
+				const lineStart = sectionInfo.lineStart;
+				const lineEnd = sectionInfo.lineEnd;
+
+				// Search only within this section
+				for (let line = lineStart; line <= lineEnd; line++) {
+					const lineText = editor.getLine(line);
+					const match = lineText.match(counterRegex);
+
+					if (match && match[2].trim() === label) {
+						const matchedValue = match[1] === '' ? 0 : parseInt(match[1], 10);
+
+						// Only update if this counter has the old value
+						if (matchedValue === oldValue) {
+							const newText = lineText.replace(counterRegex, `~ (${newValue}) ${label}`);
+							editor.setLine(line, newText);
+							return;
+						}
+					}
+				}
 			}
 		};
 
-		minusButton.addEventListener('click', () => {
+		minusButton.addEventListener('click', (e) => {
+			e.stopPropagation();
+			const oldValue = currentValue;
 			currentValue = currentValue - 1;
 			counterDisplay.textContent = currentValue.toString();
-			updateSource(currentValue);
+			updateSource(oldValue, currentValue);
 		});
 
-		plusButton.addEventListener('click', () => {
+		plusButton.addEventListener('click', (e) => {
+			e.stopPropagation();
+			const oldValue = currentValue;
 			currentValue = currentValue + 1;
 			counterDisplay.textContent = currentValue.toString();
-			updateSource(currentValue);
+			updateSource(oldValue, currentValue);
 		});
 
 		container.appendChild(counterDisplay);
