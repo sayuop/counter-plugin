@@ -7,7 +7,7 @@ A simple Obsidian plugin that creates interactive number counters with +/- butto
 To create a counter, use the following syntax in your notes:
 
 ```
-~ (0) counter label
+~ ( ) counter label
 ```
 
 This will render as an interactive counter starting at 0, with minus and plus buttons to decrease or increase the value.
@@ -15,12 +15,12 @@ This will render as an interactive counter starting at 0, with minus and plus bu
 ## Examples
 
 ```
-~ (0) Tasks completed
-~ (5) Days streak
-~ (100) Points earned
+~ ( ) Tasks completed
+~ ( ) Days streak
+~ ( ) Points earned
 ```
 
-Each counter is independent and maintains its own value in your markdown file.
+Each counter is independent and maintains its own value in your markdown file. When you click the +/- buttons, the value is updated in the source markdown.
 
 ## Installation
 

@@ -24,7 +24,7 @@ export default class CounterPlugin extends Plugin {
 	}
 
 	processCounters(element: HTMLElement, context: MarkdownPostProcessorContext) {
-		const counterRegex = /^~\s*\(\s*(\d+)\s*\)\s*(.*)$/;
+		const counterRegex = /^~\s*\(\s*(\d*)\s*\)\s*(.*)$/;
 		const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
 		const nodesToReplace: Array<{ node: Node; parent: Node }> = [];
 
@@ -50,7 +50,7 @@ export default class CounterPlugin extends Plugin {
 				const match = line.match(counterRegex);
 
 				if (match) {
-					const currentValue = parseInt(match[1], 10);
+					const currentValue = match[1] === '' ? 0 : parseInt(match[1], 10);
 					const label = match[2].trim();
 
 					const counterContainer = this.createCounterElement(
@@ -109,7 +109,7 @@ export default class CounterPlugin extends Plugin {
 
 			const editor = view.editor;
 			const content = editor.getValue();
-			const counterRegex = /^~\s*\(\s*\d+\s*\)\s*(.*)$/gm;
+			const counterRegex = /^~\s*\(\s*\d*\s*\)\s*(.*)$/gm;
 
 			let matchIndex = 0;
 			const newContent = content.replace(counterRegex, (match, capturedLabel) => {
