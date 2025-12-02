@@ -1,6 +1,7 @@
 # Node
 node_modules
 package-lock.json
+package-release.mjs
 
 # Build
 main.js
