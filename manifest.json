@@ -4,7 +4,7 @@
   "version": "1.1.0",
   "minAppVersion": "0.15.0",
   "description": "Create interactive counters with +/- buttons using ~ ( ) syntax",
-  "author": "crib",
-  "authorUrl": "https://git.cribdev.com/crib",
+  "author": "sayuop",
+  "authorUrl": "https://github.com/sayuop",
   "isDesktopOnly": false
 }
