@@ -205,17 +205,45 @@ export default class CounterPlugin extends Plugin {
 				}
 
 				const lineText = editor.getLine(targetLine);
-				const match = lineText.match(counterRegex);
 
-				if (match && match[2].trim() === label) {
-					const matchedValue = match[1] === '' ? 0 : parseInt(match[1], 10);
+				// Find all counter matches on this line
+				const globalCounterRegex = /~\s*\(\s*(-?\d*)\s*\)\s*(.+)/g;
+				let match;
+				let matchIndex = 0;
+				let targetMatchIndex = -1;
 
-					// Verify this is our counter by checking the value
-					if (matchedValue === oldValue) {
-						const newText = lineText.replace(counterRegex, `~ (${newValue}) ${label}`);
-						editor.setLine(targetLine, newText);
-						return;
+				// Determine which match corresponds to our position
+				while ((match = globalCounterRegex.exec(lineText)) !== null) {
+					const matchStart = currentPos + match.index;
+					const matchEnd = matchStart + match[0].length;
+
+					if (position >= matchStart && position <= matchEnd) {
+						targetMatchIndex = matchIndex;
+						break;
 					}
+					matchIndex++;
+				}
+
+				// Now find and replace the correct match
+				if (targetMatchIndex >= 0) {
+					globalCounterRegex.lastIndex = 0;
+					let newText = lineText;
+					let currentMatchIndex = 0;
+
+					newText = newText.replace(globalCounterRegex, (fullMatch, valueStr, labelText) => {
+						if (currentMatchIndex === targetMatchIndex) {
+							const matchedValue = valueStr === '' ? 0 : parseInt(valueStr, 10);
+							if (matchedValue === oldValue && labelText.trim() === label) {
+								currentMatchIndex++;
+								return `~ (${newValue}) ${label}`;
+							}
+						}
+						currentMatchIndex++;
+						return fullMatch;
+					});
+
+					editor.setLine(targetLine, newText);
+					return;
 				}
 			}
 
@@ -227,17 +255,26 @@ export default class CounterPlugin extends Plugin {
 				// Search only within this section
 				for (let line = lineStart; line <= lineEnd; line++) {
 					const lineText = editor.getLine(line);
-					const match = lineText.match(counterRegex);
+					const globalCounterRegex = /~\s*\(\s*(-?\d*)\s*\)\s*(.+)/g;
 
-					if (match && match[2].trim() === label) {
-						const matchedValue = match[1] === '' ? 0 : parseInt(match[1], 10);
+					// Check all matches on this line and update the first one that matches both label and oldValue
+					let foundMatch = false;
+					const newText = lineText.replace(globalCounterRegex, (fullMatch, valueStr, labelText) => {
+						if (!foundMatch && labelText.trim() === label) {
+							const matchedValue = valueStr === '' ? 0 : parseInt(valueStr, 10);
 
-						// Only update if this counter has the old value
-						if (matchedValue === oldValue) {
-							const newText = lineText.replace(counterRegex, `~ (${newValue}) ${label}`);
-							editor.setLine(line, newText);
-							return;
+							// Only update if this counter has the old value
+							if (matchedValue === oldValue) {
+								foundMatch = true;
+								return `~ (${newValue}) ${label}`;
+							}
 						}
+						return fullMatch;
+					});
+
+					if (foundMatch) {
+						editor.setLine(line, newText);
+						return;
 					}
 				}
 			}
